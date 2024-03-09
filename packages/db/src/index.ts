@@ -1,5 +1,6 @@
-import { Client } from "@planetscale/database";
-import { drizzle } from "drizzle-orm/planetscale-serverless";
+import type { Pool } from "mysql2/promise";
+import { drizzle } from "drizzle-orm/mysql2";
+import { createPool } from "mysql2/promise";
 
 import * as auth from "./schema/auth";
 import * as post from "./schema/post";
@@ -10,10 +11,15 @@ export { mySqlTable as tableCreator } from "./schema/_table";
 
 export * from "drizzle-orm";
 
-const psClient = new Client({
-  host: process.env.DB_HOST!,
-  username: process.env.DB_USERNAME!,
-  password: process.env.DB_PASSWORD!,
-});
+/**
+ * Cache the database connection in development. This avoids creating a new connection on every HMR
+ * update.
+ */
+const globalForDb = globalThis as unknown as {
+  conn: Pool | undefined;
+};
 
-export const db = drizzle(psClient, { schema });
+const conn = globalForDb.conn ?? createPool({ uri: process.env.DATABASE_URL });
+if (process.env.NODE_ENV !== "production") globalForDb.conn = conn;
+
+export const db = drizzle(conn, { schema, mode: "default" });
